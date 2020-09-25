@@ -4,8 +4,7 @@ import firebaseAuth from './firebase_config'
 import { sha256 } from 'js-sha256';
 import axios from "axios";
 import io from "socket.io-client";
-import { on } from 'superagent';
-import { createSliderWithTooltip } from 'rc-slider';
+import AWS from 'aws-sdk';
 
 //const URL = 'https://2020.battlecode.org';
 //const URL = 'http://localhost:8000'; // DEVELOPMENT
@@ -15,23 +14,32 @@ const DONOTREQUIRELOGIN = false; // set to true for DEVELOPMENT
 const LEAGUE = 0;
 const PAGE_LIMIT = 10;
 const db = firebaseAuth.firestore();
+AWS.config.update({
+  region: 'us-east-2',
+  credentials: new AWS.CognitoIdentityCredentials({
+    IdentityPoolId: 'us-east-2:4de05606-b5e2-4a25-a68f-f2cf2fd768e1'
+  })
+});
+const s3 = new AWS.S3({
+  apiVersion: '2006-03-01',
+  params: {Bucket: 'se-battle'}
+});
 
 class Api {
-  
-  static testSetOutcome() {
-    
-  }
 
   //----SUBMISSIONS----
 
   //uploads a new submission to the google cloud bucket
   static newSubmission(submissionfile, callback){
-    var submitted=false;
 
     //first check if robot name taken, if yes we dont even bother comiling
     var teamname = Cookies.get('team_name');
-    var subRef = db.collection("submissions").doc('robots');
+    var teamkey = Cookies.get('team_key');
     var executeThen=true;
+    var uploadFailed=false;
+    var dateNowInNum=Date.now();
+
+    var subRef = db.collection("submissions").doc('robots');
     subRef.get().then(function(doc) {
       if (doc.exists) {
         var allSub=doc.data().submissions;
@@ -45,9 +53,86 @@ class Api {
       } 
     }).then(function(){
       if(executeThen){
+        callback('uploading')
+        s3.upload({
+          Key: teamkey+'date'+dateNowInNum+'-'+submissionfile.name,
+          Body: submissionfile,
+          ACL: 'public-read'
+        }, function(err, data) {
+          if(err) {
+            uploadFailed=true;
+            callback('upload failed, plz try again later');
+            return
+          }
+          if (!uploadFailed){
 
-        //open socket to transfer file to server using buffer
-        const socket = io('wss://ec2-3-133-131-236.us-east-2.compute.amazonaws.com:8000');
+            console.log('Successfully Uploaded!');
+
+            //create pending status
+            var teamRef=db.collection("teams").doc(Cookies.get('team_key'));
+            teamRef.get().then(function(doc) {
+            if (doc.exists) {
+              var dateNowInReadable=Date(Date.now()).toString();
+              
+
+              var storageRef = firebaseAuth.storage().ref(teamname+'/'+dateNowInNum+submissionfile.name);
+              storageRef.put(submissionfile).then(function(snapshot) {
+                console.log('Uploaded a blob or file!');
+
+                //store info to teams collection up to three submissions
+                if(doc.data().submissions){
+                  var allSubmissions = doc.data().submissions;
+                    if(allSubmissions.length>=3){
+                      allSubmissions.splice(2, allSubmissions.length-2);
+                    }
+
+                    allSubmissions.unshift({
+                      name: submissionfile.name,
+                      numDate: dateNowInNum,
+                      readableDate: dateNowInReadable,
+                      status: 'queuing'
+                    });
+
+                    teamRef.update({
+                      submissions: allSubmissions
+                    }).then(function(){
+                      callback('uploaded')
+                    }).catch(function(err){
+                      console.log(err);
+                    });
+                  }
+                  else{
+                    var firstSubmission=[
+                      {
+                        name: submissionfile.name,
+                        numDate: dateNowInNum,
+                        readableDate: dateNowInReadable,
+                        status: 'queuing'
+                      }
+                    ]
+
+                    teamRef.update({
+                        submissions: firstSubmission
+                    }).then(function(){
+                      callback('uploaded')
+                    }).catch(function(err){
+                      console.log(err);
+                    });
+                  }
+                });
+              } 
+            })
+          }
+        }).on('httpUploadProgress', function (progress) {
+          var uploaded = parseInt((progress.loaded * 100) / progress.total);
+          $("progress").attr('value', uploaded);
+        })
+      }
+    })
+
+    
+    /* //open socket to transfer file to server using buffer
+        const socket = io('wss://sebattlecode.com:8000');
         //const socket = io('ws://localhost:8000');
         var reader = new FileReader();
         var rawData = new ArrayBuffer();
@@ -60,9 +145,7 @@ class Api {
             setTimeout(function(){
               if(!submitted)callback('queuing')
             },30000)
-            setTimeout(function(){
-              if(!submitted)callback('submission failed')
-            },600000)
+            
             socket.emit("send_message", {
               type: submissionfile.name.slice(0,submissionfile.name.length-4),
               data: rawData
@@ -71,130 +154,13 @@ class Api {
                 callback('compile failed')
                 submitted=true
                 return
-              }
-              else {
-                //after compile succeeded, check if other team's robot has the same name, if not, store all the info
-                callback('submitting')
-                submitted=true
-                //add team and its current robot to submissions collection
-                var subRef = db.collection("submissions").doc('robots');
-                subRef.get().then(function(doc) {
-                    if (doc.exists) {
-                      var allSub=doc.data().submissions;
-                      var flag = false;
-                      allSub.find((o,i)=>{
-                        if (o.teamname === teamname){
-                          if (o.robot!==submissionfile.name.slice(0,submissionfile.name.length-4)){
+              }*/
 
-                            allSub.splice(i,1,{
-                              teamname: teamname,
-                              robot: submissionfile.name.slice(0,submissionfile.name.length-4)
-                            });
-                            socket.emit("delete_message", {
-                              type: 'deleteOldRobot',
-                              data: o.robot
-                            })
-                          }
-                          flag = true;
-                        }
-                      });
-                      if(!flag){
-                        allSub.push({
-                          teamname: teamname,
-                          robot: submissionfile.name.slice(0,submissionfile.name.length-4)
-                        })
-                      }
-                      subRef.update({
-                        submissions: allSub
-                      }).then(function(){
-                        //callback('submitted')
-                      }).catch(function(err){
-                        console.log(err);
-                      });
-                    } 
-                    else {
-                      var firstTeam=[
-                        {
-                          teamname: teamname,
-                          robot: submissionfile.name.slice(0,submissionfile.name.length-4)
-                        }
-                      ]
-                      subRef.set({
-                          submissions: firstTeam
-                      }).then(function(){
-                        //callback('submitted')
-                      }).catch(function(err){
-                        console.log(err);
-                      });
-                    }
-                  }).then(function(){
-                    var teamRef=db.collection("teams").doc(Cookies.get('team_key'));
-
-                    teamRef.get().then(function(doc) {
-                      if (doc.exists) {
-
-                          var dateNowInReadable=Date(Date.now()).toString();
-                          var dateNowInNum=Date.now();
-
-                          var storageRef = firebaseAuth.storage().ref(teamname+'/'+dateNowInNum+submissionfile.name);
-
-                          storageRef.put(submissionfile).then(function(snapshot) {
-                            console.log('Uploaded a blob or file!');
-
-                            //store info to teams collection up to three submissions
-                            if(doc.data().submissions){
-                              var allSubmissions = doc.data().submissions;
-                              if(allSubmissions.length>=3){
-                                allSubmissions.splice(2, allSubmissions.length-2);
-                              }
-
-                              allSubmissions.unshift({
-                                name: submissionfile.name,
-                                numDate: dateNowInNum,
-                                readableDate: dateNowInReadable
-                              });
-
-                              teamRef.update({
-                                submissions: allSubmissions
-                              }).then(function(){
-                                callback('submitted')
-                              }).catch(function(err){
-                                console.log(err);
-                              });
-
-                            }
-                            else{
-                              var firstSubmission=[
-                                {
-                                  name: submissionfile.name,
-                                  numDate: dateNowInNum,
-                                  readableDate: dateNowInReadable
-                                }
-                              ]
-
-                              teamRef.update({
-                                  submissions: firstSubmission
-                              }).then(function(){
-                                callback('submitted')
-                              }).catch(function(err){
-                                console.log(err);
-                              });
-                            }
-                          });
-                      } 
-                      }).catch(function(error) {
-                        callback('submit failed. can\'t find your team')
-                          console.log("Error getting document:", error);
-                      }); 
-                  });
-              }       
-            });
-          }
-        }
-
-        reader.readAsArrayBuffer(submissionfile);
-    }
-  })
+        
+              
+          
+        //reader.readAsArrayBuffer(submissionfile);
+    
     // submissionfile.append('_method', 'PUT');
     // get the url from the real api
     // $.post(`${URL}/api/${LEAGUE}/submission/`, {

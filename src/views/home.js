@@ -80,7 +80,7 @@ class DateCard extends UpdateCard {
                                 </tr> )} */}
                                 <tr>
                                     
-                                <td>Sep 16</td>
+                                <td>Sep 19</td>
                                 <td><b>SE_BATTLECODE</b> ver 1.0 released!<br/> Tell <a href = "mailto:cecishi@pdx.edu">cecishi@pdx.edu</a> if you found any bugs. I would be more than glad to fix it.</td>
                                 </tr>
                             </tbody>
@@ -88,6 +88,7 @@ class DateCard extends UpdateCard {
                     </div>
                     { this.getFooter() }
                 </div>
+                
             </div>
         );
     }

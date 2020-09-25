@@ -43,7 +43,7 @@ class Submissions extends Component {
     }
 
     submitCallback=(success) => {
-        if (success==='submitted') {
+        if (success==='uploaded') {
             this.setState({isSubmitting: ''});
             window.location.reload();
         }
@@ -208,7 +208,7 @@ class Submissions extends Component {
             let button = <button disabled style={{float: "right"}} onClick={this.uploadData} className={ btn_class }> Submit </button>
             if (this.state.selectedFile !== null) {
                 btn_class += " btn-info btn-fill" 
-                file_label = this.state.selectedFile["name"]
+                file_label = this.state.selectedFile["name"]?this.state.selectedFile["name"]:''
                 button = 
                 <div style={{float: "right"}}>
                     {this.renderSubmitting(this.state.isSubmitting)}
@@ -233,7 +233,7 @@ class Submissions extends Component {
                         <p>
                             Create a <code>zip</code> file of your robot player folder. The <code>zip</code> file must contain a <code>RobotPlayer.java</code> file.</p>
                             
-                            <p>Try to compile locally before submitting the <code>zip</code> file below. Ensure that you're not importing any packages not included in the <code>zip</code> file, or your code won't compile on the server.</p>
+                            <p>Try to compile locally before submitting the <code>zip</code> file below. Ensure that you're not importing any packages not included in the <code>zip</code> file.</p>
                         <label htmlFor="file_upload">
                             <div className="btn"> Choose File </div> <span style={ { textTransform: 'none', marginLeft: '10px', fontSize: '14px'} }> {file_label} </span>
                         </label>
@@ -291,9 +291,11 @@ class Submissions extends Component {
                     return (
                         <tr key={ submission.id }>
                             <td>{ (new Date(submission.readableDate)).toLocaleString() }</td>
-                            <td> <button className="btn btn-xs" onClick={() => this.onSubFileRequest(submission.name, submission.numDate)}>Download</button> </td>   
+                            {submission.status==='compiled'?
+                            <td> <button className="btn btn-xs" onClick={() => this.onSubFileRequest(submission.name, submission.numDate)}>Download</button> </td>   :
+                            <td>{submission.status}</td>}
                             {this.renderLoading(this.state.isLoading)}                     
-                        </tr>
+                        </tr> 
                     ) 
                 }
             })
@@ -372,6 +374,8 @@ class Submissions extends Component {
                             <div className="card">
                                 <div className="header">
                                     <h4 className="title">Latest Submissions</h4>
+                                    <br />
+                                    <p>If it's queuing, refresh the page every 2-3 minutes.</p>
                                 </div>
                                 <div className="content">
                                     { this.renderHelperLastTable() }
