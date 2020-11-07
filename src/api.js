@@ -981,19 +981,20 @@ class Api {
             querySnapshot.forEach(function(doc) {
               allTeam.push(doc.data());
             });
-
+            
             //now all team info ready
             s.find((o,i)=>{
               if (o.Elo===false){
                 //Elo equals to false means havent calculated yet
-                var won = (o.STATUS === 'Awon')? o.TEAMA : o.TEAMB;
-                var los = (o.STATUS === 'Awon')? o.TEAMB : o.TEAMA;
+                var won = (o.STATUS === 'Awon')? o.TEAMA : (o.STATUS === 'Bwon')? o.TEAMB : '';
+                var los = (o.STATUS === 'Awon')? o.TEAMB : (o.STATUS === 'Bwon')? o.TEAMA : '';
                 
                 var wonIndex;
                 var losIndex;
                 allTeam.find((o, i) => {
                   if (o.name === won) {
                       wonIndex=i
+                      
                       return true; // stop searching
                   }
                 });
@@ -1004,26 +1005,29 @@ class Api {
                   }
                 });
 
-                var probW = 1.0 * 1.0 / (1 + 1.0 * Math.pow(10, 1.0 * (allTeam[losIndex].score - allTeam[wonIndex].score) / 400))  
-                var probL = 1 - probW   
-                allTeam[wonIndex].score += 32 * (1 - probW)
-                allTeam[losIndex].score += 32 * (0 - probL)
-                allTeam[wonIndex].won += 1
-                allTeam[losIndex].los += 1
+                if (wonIndex!==null && losIndex!==null && allTeam[losIndex] && allTeam[wonIndex]){
+                  var probW = 1.0 * 1.0 / (1 + 1.0 * Math.pow(10, 1.0 * (allTeam[losIndex].score - allTeam[wonIndex].score) / 400))  
+                  var probL = 1 - probW   
+                  allTeam[wonIndex].score += 32 * (1 - probW)
+                  allTeam[losIndex].score += 32 * (0 - probL)
+                  allTeam[wonIndex].won += 1
+                  allTeam[losIndex].los += 1
 
-                allScri.splice(i,1,{
-                  DATE: s[i].DATE,
-                  DATESTORE: s[i].DATESTORE,
-                  Elo: true,
-                  MAP: s[i].MAP,
-                  REPLAY: s[i].REPLAY,
-                  ROBOTA: s[i].ROBOTA,
-                  ROBOTB: s[i].ROBOTB,
-                  STATUS: s[i].STATUS,
-                  TEAMA: s[i].TEAMA,
-                  TEAMB: s[i].TEAMB,
-                  TIME: s[i].TIME
-                }); 
+                  allScri.splice(i,1,{
+                    DATE: s[i].DATE,
+                    DATESTORE: s[i].DATESTORE,
+                    Elo: true,
+                    MAP: s[i].MAP,
+                    REPLAY: s[i].REPLAY,
+                    ROBOTA: s[i].ROBOTA,
+                    ROBOTB: s[i].ROBOTB,
+                    STATUS: s[i].STATUS,
+                    TEAMA: s[i].TEAMA,
+                    TEAMB: s[i].TEAMB,
+                    TIME: s[i].TIME
+                  }); 
+                }
+                
               }
             })
 
